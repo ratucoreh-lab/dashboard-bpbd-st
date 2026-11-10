@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Kejadian Bencana - Kabupaten Sumba Timur</title>
+<style>
+:root{--bg:#f3f5f9;--card:#fff;--text:#1b2433;--muted:#64708a;--line:#e1e6ee;--accent:#1d4f9c;--accent2:#2f6fd0;--emas:#c9973c}
+@media (prefers-color-scheme: dark){:root{--bg:#0f141c;--card:#18202b;--text:#e7edf5;--muted:#9aa7b9;--line:#2a3646;--accent:#3b82f6;--accent2:#5b9bff}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.5}
+header{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;padding:18px 20px}
+header h1{margin:0;font-size:20px}
+header .sub{font-size:13px;opacity:.9}
+main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-top:2px solid var(--emas);border-radius:10px;padding:16px}
+h2{font-size:15px;margin:0 0 12px;font-weight:650}
+.meta{font-size:13px;color:var(--muted)}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.kpi .card{text-align:center}
+.kpi b{display:block;font-size:26px;font-weight:700;color:var(--accent)}
+.kpi span{color:var(--muted);font-size:12px}
+.grafik{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.bar-row{display:grid;grid-template-columns:160px 1fr 44px;gap:8px;align-items:center;margin-bottom:8px}
+.bar-row .label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.track{background:var(--line);border-radius:6px;height:14px;overflow:hidden}
+.fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:6px}
+.bar-row .nilai{text-align:right;font-weight:600}
+.kolom{display:flex;align-items:flex-end;gap:6px;height:180px;padding-top:8px;border-bottom:1px solid var(--line)}
+.kolom .batang{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.kolom .isi{width:100%;background:linear-gradient(180deg,var(--accent2),var(--accent));border-radius:6px 6px 0 0}
+.kolom .n{font-size:11px;font-weight:600;margin-bottom:2px}
+.kolom .bln{font-size:11px;color:var(--muted);margin-top:4px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line)}
+th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+td.angka,th.angka{text-align:right}
+.kosong{text-align:center;color:var(--muted);padding:24px}
+footer{max-width:1100px;margin:0 auto;padding:8px 16px 28px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Data Kejadian Bencana</h1>
+  <div class="sub">Kabupaten Sumba Timur &middot; Badan Penanggulangan Bencana Daerah</div>
+</header>
+
+<main>
+
+<section class="card">
+  <div id="periode" style="font-weight:650">Memuat data...</div>
+  <div class="meta" id="meta"></div>
+</section>
+
+<section class="kpi">
+  <div class="card"><b id="k-total">-</b><span>Total kejadian</span></div>
+  <div class="card"><b id="k-meninggal">-</b><span>Korban meninggal</span></div>
+  <div class="card"><b id="k-luka">-</b><span>Korban luka</span></div>
+  <div class="card"><b id="k-pengungsi">-</b><span>Pengungsi (jiwa)</span></div>
+</section>
+
+<section class="grafik">
+  <div class="card">
+    <h2>Kejadian per jenis bencana</h2>
+    <div id="grafik-jenis"></div>
+  </div>
+  <div class="card">
+    <h2>Kejadian per bulan</h2>
+    <div class="kolom" id="grafik-bulan"></div>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Kerusakan infrastruktur (unit)</h2>
+  <div id="tabel-infra"></div>
+</section>
+
+</main>
+
+<footer>
+  Data bersumber dari BPBD Kabupaten Sumba Timur dan bersifat ringkasan. Angka dapat berubah setelah verifikasi lanjutan.
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const NAMA_BULAN = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+const NAMA_BULAN_PANJANG = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+
+// Membaca ringkasan.json yang diunggah bersama halaman ini.
+// Berkas ini hanya berisi angka rekap, tanpa data pribadi pelapor.
+async function muatRingkasan() {
+  try {
+    const res = await fetch("ringkasan.json", {cache: "no-store"});
+    if (!res.ok) throw new Error("tidak ditemukan");
+    const d = await res.json();
+    tampilkan(d);
+  } catch (e) {
+    $("periode").textContent = "Data belum tersedia";
+    $("meta").textContent = "Ringkasan kejadian belum dapat dimuat. Silakan coba lagi nanti.";
+    ["k-total","k-meninggal","k-luka","k-pengungsi"].forEach(id => $(id).textContent = "-");
+    $("grafik-jenis").innerHTML = '<div class="kosong">Belum ada data.</div>';
+    $("grafik-bulan").innerHTML = '<div class="kosong" style="width:100%">Belum ada data.</div>';
+    $("tabel-infra").innerHTML = '<div class="kosong">Belum ada data.</div>';
+  }
+}
+
+function labelPeriode(p) {
+  if (!p) return "-";
+  const [t, b] = String(p).split("-");
+  if (!b) return "Tahun " + t;
+  return (NAMA_BULAN_PANJANG[parseInt(b, 10) - 1] || b) + " " + t;
+}
+
+function tampilkan(d) {
+  $("periode").textContent = "Periode: " + labelPeriode(d.periode);
+  $("meta").textContent = "Sumber: " + (d.sumber || "BPBD Kab. Sumba Timur") +
+    (d.diperbarui ? " \u00b7 Diperbarui: " + d.diperbarui : "");
+
+  $("k-total").textContent = d.total_kejadian ?? 0;
+  $("k-meninggal").textContent = d.korban_meninggal ?? 0;
+  $("k-luka").textContent = d.korban_luka ?? 0;
+  $("k-pengungsi").textContent = d.pengungsi ?? 0;
+
+  // Diagram batang per jenis bencana
+  const jenis = (d.per_jenis || []).slice().sort((a, b) => b.kejadian - a.kejadian);
+  if (!jenis.length) {
+    $("grafik-jenis").innerHTML = '<div class="kosong">Tidak ada kejadian pada periode ini.</div>';
+  } else {
+    const maks = Math.max(...jenis.map(x => x.kejadian), 1);
+    $("grafik-jenis").innerHTML = jenis.map(x => `
+      <div class="bar-row">
+        <div class="label" title="${esc(x.jenis)}">${esc(x.jenis)}</div>
+        <div class="track"><div class="fill" style="width:${(x.kejadian / maks * 100).toFixed(1)}%"></div></div>
+        <div class="nilai">${x.kejadian}</div>
+      </div>`).join("");
+  }
+
+  // Diagram kolom per bulan
+  const bulan = d.per_bulan || [];
+  if (!bulan.length) {
+    $("grafik-bulan").innerHTML = '<div class="kosong" style="width:100%">Belum ada data bulanan.</div>';
+  } else {
+    const maks = Math.max(...bulan.map(x => x.kejadian), 1);
+    $("grafik-bulan").innerHTML = bulan.map(x => {
+      const nomorBulan = parseInt(String(x.bulan).slice(5, 7), 10) || 1;
+      return `<div class="batang">
+        <div class="n">${x.kejadian}</div>
+        <div class="isi" style="height:${(x.kejadian / maks * 100).toFixed(1)}%"></div>
+        <div class="bln">${NAMA_BULAN[nomorBulan - 1]}</div>
+      </div>`;
+    }).join("");
+  }
+
+  // Tabel kerusakan infrastruktur
+  const infra = d.infrastruktur || [];
+  if (!infra.length) {
+    $("tabel-infra").innerHTML = '<div class="kosong">Belum ada data kerusakan infrastruktur.</div>';
+  } else {
+    $("tabel-infra").innerHTML = `<table>
+      <thead><tr><th>Jenis infrastruktur</th><th class="angka">Rusak ringan</th><th class="angka">Rusak sedang</th><th class="angka">Rusak berat</th><th class="angka">Total</th></tr></thead>
+      <tbody>${infra.map(x => {
+        const total = (x.rusak_ringan || 0) + (x.rusak_sedang || 0) + (x.rusak_berat || 0);
+        return `<tr><td>${esc(x.jenis)}</td><td class="angka">${x.rusak_ringan || 0}</td><td class="angka">${x.rusak_sedang || 0}</td><td class="angka">${x.rusak_berat || 0}</td><td class="angka"><b>${total}</b></td></tr>`;
+      }).join("")}</tbody></table>`;
+  }
+}
+
+muatRingkasan();
+</script>
+</body>
+</html>
